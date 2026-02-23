@@ -1,0 +1,103 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mcp-proxy"
+version = "0.1.0"
+description = "Interactive MCP traffic interceptor for security research — inspect, modify, and replay JSON-RPC messages"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+authors = [
+    { name = "Richard Spicer", email = "richard@richardspicer.io" },
+]
+keywords = ["mcp", "security", "proxy", "intercept", "model-context-protocol", "ai-security"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Topic :: Software Development :: Testing",
+    "Typing :: Typed",
+]
+dependencies = [
+    "mcp>=1.26,<2",
+    "click>=8.3",
+    "textual>=8",
+    "pydantic>=2.0",
+]
+
+[dependency-groups]
+dev = [
+    {include-group = "fixtures"},
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.15",
+    "pre-commit>=4.5",
+    "mypy>=1.19",
+]
+fixtures = [
+    "fastmcp>=2.14,<3",
+]
+
+[project.scripts]
+mcp-proxy = "mcp_proxy.cli:main"
+
+[project.urls]
+Homepage = "https://richardspicer.io"
+Repository = "https://github.com/richardspicer/mcp-proxy"
+Issues = "https://github.com/richardspicer/mcp-proxy/issues"
+Documentation = "https://github.com/richardspicer/mcp-proxy/tree/main/docs"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mcp_proxy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort (import sorting)
+    "N",    # pep8-naming
+    "W",    # pycodestyle warnings
+    "B",    # flake8-bugbear (common bugs)
+    "C90",  # mccabe complexity
+    "UP",   # pyupgrade (modernize syntax)
+    "S",    # flake8-bandit (security)
+    "SIM",  # flake8-simplify
+]
+ignore = [
+    "S101",  # assert usage (fine in tests)
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 15
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S"]               # Tests: skip security checks
+"fixtures/*" = ["S"]            # Fixture servers: intentionally vulnerable
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true
