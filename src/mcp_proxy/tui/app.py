@@ -17,7 +17,7 @@ from textual.worker import Worker
 
 from mcp_proxy.adapters.base import TransportAdapter
 from mcp_proxy.intercept import InterceptEngine
-from mcp_proxy.models import InterceptMode, Transport
+from mcp_proxy.models import HeldMessage, InterceptMode, ProxyMessage, Transport
 from mcp_proxy.pipeline import PipelineSession, run_pipeline
 from mcp_proxy.session_store import SessionStore
 from mcp_proxy.tui.messages import (
@@ -193,10 +193,23 @@ class ProxyApp(App[None]):
             session_store=self.session_store,
             intercept_engine=self.intercept_engine,
             transport=self.transport,
-            on_message=lambda pm: self.post_message(MessageReceived(pm)),
-            on_held=lambda held: self.post_message(MessageHeld(held)),
-            on_forwarded=lambda pm: self.post_message(MessageForwarded(pm)),
+            on_message=self._on_pipeline_message,
+            on_held=self._on_pipeline_held,
+            on_forwarded=self._on_pipeline_forwarded,
         )
+
+    # ------------------------------------------------------------------
+    # Pipeline callback wrappers (discard post_message return value)
+    # ------------------------------------------------------------------
+
+    def _on_pipeline_message(self, pm: ProxyMessage) -> None:
+        self.post_message(MessageReceived(pm))
+
+    def _on_pipeline_held(self, held: HeldMessage) -> None:
+        self.post_message(MessageHeld(held))
+
+    def _on_pipeline_forwarded(self, pm: ProxyMessage) -> None:
+        self.post_message(MessageForwarded(pm))
 
     # ------------------------------------------------------------------
     # Message handlers
