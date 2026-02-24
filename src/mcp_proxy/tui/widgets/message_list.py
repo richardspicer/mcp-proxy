@@ -213,7 +213,7 @@ class MessageListPanel(Widget):
         """
         self._active_filter = filter_text
         list_view = self.query_one(ListView)
-        for i, pm in enumerate(self.messages):
+        for pm in self.messages:
             try:
                 item = list_view.query_one(f"#msg-{pm.id}", ListItem)
             except NoMatches:
