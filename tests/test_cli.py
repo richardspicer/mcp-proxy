@@ -26,3 +26,25 @@ def test_version():
     runner = CliRunner()
     result = runner.invoke(main, ["--version"])
     assert result.exit_code == 0
+
+
+class TestProxyValidation:
+    """proxy command validates transport/target combinations."""
+
+    def test_stdio_requires_target_command(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["proxy", "--transport", "stdio"])
+        assert result.exit_code != 0
+        assert "target-command" in result.output.lower() or "required" in result.output.lower()
+
+    def test_sse_requires_target_url(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["proxy", "--transport", "sse"])
+        assert result.exit_code != 0
+        assert "target-url" in result.output.lower() or "required" in result.output.lower()
+
+    def test_streamable_http_requires_target_url(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["proxy", "--transport", "streamable-http"])
+        assert result.exit_code != 0
+        assert "target-url" in result.output.lower() or "required" in result.output.lower()

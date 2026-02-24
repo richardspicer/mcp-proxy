@@ -1,6 +1,10 @@
 """CLI entry point for mcp-proxy."""
 
+from pathlib import Path
+
 import click
+
+from mcp_proxy.models import Transport
 
 
 @click.group()
@@ -30,8 +34,23 @@ def proxy(
     session_file: str | None,
 ) -> None:
     """Start the proxy with TUI."""
-    click.echo(f"mcp-proxy: transport={transport}, intercept={intercept}")
-    click.echo("Not yet implemented.")
+    # Validate transport/target combinations
+    if transport == "stdio" and not target_command:
+        raise click.UsageError("--target-command is required for stdio transport.")
+    if transport in ("sse", "streamable-http") and not target_url:
+        raise click.UsageError("--target-url is required for SSE/HTTP transport.")
+
+    from mcp_proxy.tui.app import ProxyApp
+
+    transport_enum = Transport(transport.replace("-", "_"))
+    app = ProxyApp(
+        transport=transport_enum,
+        server_command=target_command,
+        server_url=target_url,
+        intercept=intercept,
+        session_file=Path(session_file) if session_file else None,
+    )
+    app.run()
 
 
 @main.command()
