@@ -1,11 +1,20 @@
 """Tests for mcp_proxy.models."""
 
+import asyncio
 import uuid
 from datetime import UTC, datetime
 
 from mcp.types import JSONRPCMessage, JSONRPCRequest
 
-from mcp_proxy.models import Direction, InterceptAction, InterceptMode, ProxyMessage, Transport
+from mcp_proxy.models import (
+    Direction,
+    HeldMessage,
+    InterceptAction,
+    InterceptMode,
+    InterceptState,
+    ProxyMessage,
+    Transport,
+)
 
 
 class TestDirection:
@@ -98,3 +107,93 @@ class TestProxyMessage:
         assert msg.modified is True
         assert msg.original_raw is not None
         assert msg.original_raw is original
+
+
+class TestHeldMessage:
+    def test_creation(self) -> None:
+        raw = _make_request()
+        proxy_msg = ProxyMessage(
+            id="test-id",
+            sequence=1,
+            timestamp=datetime.now(tz=UTC),
+            direction=Direction.CLIENT_TO_SERVER,
+            transport=Transport.STDIO,
+            raw=raw,
+            jsonrpc_id=1,
+            method="tools/list",
+            correlated_id=None,
+            modified=False,
+            original_raw=None,
+        )
+        held = HeldMessage(
+            proxy_message=proxy_msg,
+            release=asyncio.Event(),
+            action=None,
+            modified_raw=None,
+        )
+        assert held.proxy_message is proxy_msg
+        assert held.action is None
+        assert held.modified_raw is None
+        assert not held.release.is_set()
+
+    async def test_event_signaling(self) -> None:
+        raw = _make_request()
+        proxy_msg = ProxyMessage(
+            id="test-id",
+            sequence=1,
+            timestamp=datetime.now(tz=UTC),
+            direction=Direction.CLIENT_TO_SERVER,
+            transport=Transport.STDIO,
+            raw=raw,
+            jsonrpc_id=1,
+            method="tools/list",
+            correlated_id=None,
+            modified=False,
+            original_raw=None,
+        )
+        held = HeldMessage(
+            proxy_message=proxy_msg,
+            release=asyncio.Event(),
+            action=None,
+            modified_raw=None,
+        )
+        assert not held.release.is_set()
+        held.action = InterceptAction.FORWARD
+        held.release.set()
+        assert held.release.is_set()
+        assert held.action == InterceptAction.FORWARD
+
+
+class TestInterceptState:
+    def test_default_passthrough(self) -> None:
+        state = InterceptState(mode=InterceptMode.PASSTHROUGH)
+        assert state.mode == InterceptMode.PASSTHROUGH
+        assert state.held_messages == []
+
+    def test_with_held_messages(self) -> None:
+        raw = _make_request()
+        proxy_msg = ProxyMessage(
+            id="test-id",
+            sequence=1,
+            timestamp=datetime.now(tz=UTC),
+            direction=Direction.CLIENT_TO_SERVER,
+            transport=Transport.STDIO,
+            raw=raw,
+            jsonrpc_id=1,
+            method="tools/list",
+            correlated_id=None,
+            modified=False,
+            original_raw=None,
+        )
+        held = HeldMessage(
+            proxy_message=proxy_msg,
+            release=asyncio.Event(),
+            action=None,
+            modified_raw=None,
+        )
+        state = InterceptState(
+            mode=InterceptMode.INTERCEPT,
+            held_messages=[held],
+        )
+        assert state.mode == InterceptMode.INTERCEPT
+        assert len(state.held_messages) == 1

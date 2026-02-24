@@ -6,7 +6,8 @@ session containers for capture/export, and intercept engine state.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import asyncio
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 
@@ -94,3 +95,33 @@ class ProxyMessage:
     correlated_id: str | None
     modified: bool
     original_raw: JSONRPCMessage | None
+
+
+@dataclass
+class HeldMessage:
+    """A message held by the intercept engine, awaiting user action.
+
+    Args:
+        proxy_message: The intercepted message.
+        release: Event set when the user acts (forward/modify/drop).
+        action: The user's chosen action (populated before setting release).
+        modified_raw: If action is MODIFY, the edited JSON-RPC message.
+    """
+
+    proxy_message: ProxyMessage
+    release: asyncio.Event
+    action: InterceptAction | None
+    modified_raw: JSONRPCMessage | None
+
+
+@dataclass
+class InterceptState:
+    """Current state of the intercept engine.
+
+    Args:
+        mode: PASSTHROUGH (forward all) or INTERCEPT (hold all).
+        held_messages: Messages currently waiting for user action.
+    """
+
+    mode: InterceptMode
+    held_messages: list[HeldMessage] = field(default_factory=list)
