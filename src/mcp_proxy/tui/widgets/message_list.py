@@ -6,11 +6,13 @@ Each item displays direction, sequence number, and method/type.
 
 from __future__ import annotations
 
+import json
+
 from textual.app import ComposeResult
 from textual.css.query import NoMatches
 from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import ListItem, ListView, Static
+from textual.widgets import Input, ListItem, ListView, Static
 
 from mcp_proxy.models import Direction, ProxyMessage
 
@@ -52,6 +54,7 @@ class MessageListPanel(Widget):
         self.messages: list[ProxyMessage] = []
         self._held_ids: set[str] = set()
         self._dropped_ids: set[str] = set()
+        self._active_filter: str = ""
 
     def compose(self) -> ComposeResult:
         """Compose the widget with an empty ListView."""
@@ -149,6 +152,44 @@ class MessageListPanel(Widget):
         arrow = "\u25ba" if pm.direction == Direction.CLIENT_TO_SERVER else "\u25c4"
         method_label = pm.method if pm.method else "response"
         return f"{prefix}{arrow} #{pm.sequence} {method_label}"
+
+    def _matches_filter(self, pm: ProxyMessage, filter_text: str) -> bool:
+        """Check if a ProxyMessage matches the filter.
+
+        Args:
+            pm: The ProxyMessage to check.
+            filter_text: The filter string.
+
+        Returns:
+            True if the message matches.
+        """
+        if not filter_text:
+            return True
+
+        text = filter_text
+        required_direction: Direction | None = None
+
+        if text.startswith(">"):
+            required_direction = Direction.CLIENT_TO_SERVER
+            text = text[1:]
+        elif text.startswith("<"):
+            required_direction = Direction.SERVER_TO_CLIENT
+            text = text[1:]
+
+        if required_direction is not None and pm.direction != required_direction:
+            return False
+
+        if not text:
+            return True
+
+        text_lower = text.lower()
+
+        if pm.method and text_lower in pm.method.lower():
+            return True
+
+        payload = pm.raw.model_dump(by_alias=True, exclude_none=True)
+        serialized = json.dumps(payload).lower()
+        return text_lower in serialized
 
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
         """Handle list item highlight -- fire MessageSelected.
