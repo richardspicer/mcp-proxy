@@ -6,6 +6,7 @@ Each item displays direction, sequence number, and method/type.
 
 from __future__ import annotations
 
+from textual.app import ComposeResult
 from textual.css.query import NoMatches
 from textual.message import Message
 from textual.widget import Widget
@@ -50,7 +51,7 @@ class MessageListPanel(Widget):
         self.messages: list[ProxyMessage] = []
         self._held_ids: set[str] = set()
 
-    def compose(self):
+    def compose(self) -> ComposeResult:
         """Compose the widget with an empty ListView."""
         yield ListView()
 

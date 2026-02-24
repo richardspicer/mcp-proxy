@@ -7,6 +7,7 @@ as a background worker, and wires pipeline callbacks to widget updates.
 from __future__ import annotations
 
 import logging
+import shlex
 import uuid
 from pathlib import Path
 
@@ -145,8 +146,8 @@ class ProxyApp(App[None]):
             self.post_message(PipelineError(ValueError("No server command")))
             return
 
-        # Parse command into executable + args
-        parts = self.server_command.split()
+        # Parse command into executable + args (shlex handles quoting)
+        parts = shlex.split(self.server_command)
         command = parts[0]
         args = parts[1:] if len(parts) > 1 else []
 
