@@ -63,12 +63,18 @@ class MessageListPanel(Widget):
     def add_message(self, proxy_message: ProxyMessage) -> None:
         """Add a new message to the list.
 
+        Respects the active filter — non-matching messages are added hidden.
+
         Args:
             proxy_message: The message to add.
         """
         self.messages.append(proxy_message)
         label = self._format_label(proxy_message)
         item = ListItem(Static(label), id=f"msg-{proxy_message.id}")
+        if self._active_filter and not self._matches_filter(
+            proxy_message, self._active_filter
+        ):
+            item.add_class("hidden")
         self.query_one(ListView).append(item)
 
     def mark_held(self, proxy_id: str) -> None:
@@ -190,6 +196,26 @@ class MessageListPanel(Widget):
         payload = pm.raw.model_dump(by_alias=True, exclude_none=True)
         serialized = json.dumps(payload).lower()
         return text_lower in serialized
+
+    def set_filter(self, filter_text: str) -> None:
+        """Apply a filter to the message list.
+
+        Shows only messages matching the filter. Empty string shows all.
+
+        Args:
+            filter_text: The filter string to apply.
+        """
+        self._active_filter = filter_text
+        list_view = self.query_one(ListView)
+        for i, pm in enumerate(self.messages):
+            try:
+                item = list_view.query_one(f"#msg-{pm.id}", ListItem)
+            except NoMatches:
+                continue
+            if self._matches_filter(pm, filter_text):
+                item.remove_class("hidden")
+            else:
+                item.add_class("hidden")
 
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
         """Handle list item highlight -- fire MessageSelected.

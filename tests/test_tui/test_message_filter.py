@@ -131,3 +131,81 @@ class TestMatchesFilter:
             panel = app.query_one(MessageListPanel)
             pm = _make_proxy_message("tools/list")
             assert panel._matches_filter(pm, "TOOLS") is True
+
+
+class TestSetFilter:
+    """Tests for set_filter visibility toggling and filter-aware add_message."""
+
+    async def test_set_filter_hides_items(self) -> None:
+        """set_filter hides non-matching items via 'hidden' class."""
+        app = FilterTestApp()
+        async with app.run_test() as pilot:
+            panel = app.query_one(MessageListPanel)
+            pm_tools = _make_proxy_message("tools/list", seq=0)
+            pm_ping = _make_proxy_message("ping", seq=1, msg_id=2)
+            panel.add_message(pm_tools)
+            panel.add_message(pm_ping)
+            await pilot.pause()
+
+            panel.set_filter("tools")
+            await pilot.pause()
+
+            tools_item = panel.query_one(f"#msg-{pm_tools.id}")
+            ping_item = panel.query_one(f"#msg-{pm_ping.id}")
+            assert not tools_item.has_class("hidden")
+            assert ping_item.has_class("hidden")
+
+    async def test_set_filter_empty_shows_all(self) -> None:
+        """Clearing the filter shows all items."""
+        app = FilterTestApp()
+        async with app.run_test() as pilot:
+            panel = app.query_one(MessageListPanel)
+            pm_tools = _make_proxy_message("tools/list", seq=0)
+            pm_ping = _make_proxy_message("ping", seq=1, msg_id=2)
+            panel.add_message(pm_tools)
+            panel.add_message(pm_ping)
+            await pilot.pause()
+
+            panel.set_filter("tools")
+            await pilot.pause()
+            panel.set_filter("")
+            await pilot.pause()
+
+            tools_item = panel.query_one(f"#msg-{pm_tools.id}")
+            ping_item = panel.query_one(f"#msg-{pm_ping.id}")
+            assert not tools_item.has_class("hidden")
+            assert not ping_item.has_class("hidden")
+
+    async def test_add_message_respects_filter(self) -> None:
+        """Adding a non-matching message while filter is active hides it."""
+        app = FilterTestApp()
+        async with app.run_test() as pilot:
+            panel = app.query_one(MessageListPanel)
+            pm_tools = _make_proxy_message("tools/list", seq=0)
+            panel.add_message(pm_tools)
+            await pilot.pause()
+
+            panel.set_filter("tools")
+            await pilot.pause()
+
+            pm_ping = _make_proxy_message("ping", seq=1, msg_id=2)
+            panel.add_message(pm_ping)
+            await pilot.pause()
+
+            ping_item = panel.query_one(f"#msg-{pm_ping.id}")
+            assert ping_item.has_class("hidden")
+
+    async def test_add_message_shows_matching(self) -> None:
+        """Adding a matching message while filter is active shows it."""
+        app = FilterTestApp()
+        async with app.run_test() as pilot:
+            panel = app.query_one(MessageListPanel)
+            panel.set_filter("tools")
+            await pilot.pause()
+
+            pm_tools = _make_proxy_message("tools/call", seq=0)
+            panel.add_message(pm_tools)
+            await pilot.pause()
+
+            tools_item = panel.query_one(f"#msg-{pm_tools.id}")
+            assert not tools_item.has_class("hidden")
