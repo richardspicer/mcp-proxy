@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.css.query import NoMatches
 from textual.message import Message
 from textual.widget import Widget
@@ -49,6 +50,10 @@ class MessageListPanel(Widget):
     }
     """
 
+    BINDINGS = [
+        Binding("escape", "unfocus_filter", "Back to list", show=False),
+    ]
+
     def __init__(self) -> None:
         super().__init__()
         self.messages: list[ProxyMessage] = []
@@ -57,7 +62,8 @@ class MessageListPanel(Widget):
         self._active_filter: str = ""
 
     def compose(self) -> ComposeResult:
-        """Compose the widget with an empty ListView."""
+        """Compose the widget with a filter Input and ListView."""
+        yield Input(placeholder="Filter (> client, < server)...", id="filter-input")
         yield ListView()
 
     def add_message(self, proxy_message: ProxyMessage) -> None:
@@ -216,6 +222,10 @@ class MessageListPanel(Widget):
                 item.remove_class("hidden")
             else:
                 item.add_class("hidden")
+
+    def action_unfocus_filter(self) -> None:
+        """Return focus from the filter input to the message list."""
+        self.query_one(ListView).focus()
 
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
         """Handle list item highlight -- fire MessageSelected.
