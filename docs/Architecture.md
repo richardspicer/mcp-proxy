@@ -466,6 +466,11 @@ Filters the message list in real-time without affecting the session store.
 The message pipeline requires zero changes — it only interacts with the
 `TransportAdapter` interface.
 
+**Implementation note:** The stdio adapters (`StdioServerAdapter`, `StdioClientAdapter`)
+share ~90% of their bridge logic (asyncio.Queue, reader/writer tasks, close/shutdown
+signaling). Consider extracting a `_BaseStreamAdapter` with shared bridge plumbing
+once a third adapter is added. Don't premature-abstract with only two.
+
 ### Adding Intercept Conditions (v2)
 
 1. Define a `Breakpoint` dataclass with match criteria (tool name, method, content pattern)
