@@ -13,6 +13,7 @@ from mcp_proxy.models import (
     InterceptMode,
     InterceptState,
     ProxyMessage,
+    ProxySession,
     Transport,
 )
 
@@ -197,3 +198,42 @@ class TestInterceptState:
         )
         assert state.mode == InterceptMode.INTERCEPT
         assert len(state.held_messages) == 1
+
+
+class TestProxySession:
+    def test_creation(self) -> None:
+        session = ProxySession(
+            id="session-123",
+            started_at=datetime.now(tz=UTC),
+            ended_at=None,
+            transport=Transport.STDIO,
+            server_command="python server.py",
+            server_url=None,
+            messages=[],
+            metadata={},
+        )
+        assert session.id == "session-123"
+        assert session.ended_at is None
+        assert session.server_command == "python server.py"
+        assert session.messages == []
+
+    def test_serialization_roundtrip(self) -> None:
+        now = datetime.now(tz=UTC)
+        session = ProxySession(
+            id="session-456",
+            started_at=now,
+            ended_at=now,
+            transport=Transport.SSE,
+            server_command=None,
+            server_url="http://localhost:8080/sse",
+            messages=[],
+            metadata={"target": "test-server", "notes": "integration test"},
+        )
+        json_str = session.model_dump_json()
+        restored = ProxySession.model_validate_json(json_str)
+        assert restored.id == session.id
+        assert restored.started_at == session.started_at
+        assert restored.ended_at == session.ended_at
+        assert restored.transport == Transport.SSE
+        assert restored.server_url == "http://localhost:8080/sse"
+        assert restored.metadata == {"target": "test-server", "notes": "integration test"}

@@ -10,8 +10,10 @@ import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 
 from mcp.types import JSONRPCMessage
+from pydantic import BaseModel
 
 
 class Direction(StrEnum):
@@ -125,3 +127,30 @@ class InterceptState:
 
     mode: InterceptMode
     held_messages: list[HeldMessage] = field(default_factory=list)
+
+
+class ProxySession(BaseModel):
+    """A captured proxy session — the unit of evidence.
+
+    Serialized to JSON for session export and replay. Uses Pydantic
+    for reliable serialization/deserialization.
+
+    Args:
+        id: Session UUID string.
+        started_at: When the session started.
+        ended_at: When the session ended (None if still active).
+        transport: The transport type used for this session.
+        server_command: For stdio: the command that launched the server.
+        server_url: For SSE/HTTP: the server endpoint URL.
+        messages: Ordered sequence of serialized proxy messages.
+        metadata: Arbitrary session metadata (target name, notes, etc.).
+    """
+
+    id: str
+    started_at: datetime
+    ended_at: datetime | None
+    transport: Transport
+    server_command: str | None
+    server_url: str | None
+    messages: list[dict[str, Any]]
+    metadata: dict[str, Any]
