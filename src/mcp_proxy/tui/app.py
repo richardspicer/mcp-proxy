@@ -78,6 +78,7 @@ class ProxyApp(App[None]):
         Binding("f9", "replay_message", "Replay", show=False),
         Binding("ctrl+s", "confirm_modify", "Confirm Edit", show=False),
         Binding("escape", "cancel_modify", "Cancel Edit", show=False),
+        Binding("/", "focus_filter", "Filter", key_display="/"),
     ]
 
     def __init__(
@@ -430,6 +431,16 @@ class ProxyApp(App[None]):
         bar = self.query_one(ProxyStatusBar)
         bar.held_count = len(self.intercept_engine.get_held())
 
+    def action_focus_filter(self) -> None:
+        """Focus the message filter input."""
+        if self._editing:
+            return
+        try:
+            filter_input = self.query_one("#filter-input", Input)
+            filter_input.focus()
+        except NoMatches:
+            pass
+
     def action_replay_message(self) -> None:
         """Replay the selected message against a fresh server connection."""
         if self._editing:
@@ -552,6 +563,17 @@ class ProxyApp(App[None]):
         if path_str:
             self._do_save(Path(path_str))
         event.input.remove()
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Handle filter input changes for live filtering.
+
+        Args:
+            event: The Input.Changed event.
+        """
+        if event.input.id != "filter-input":
+            return
+        panel = self.query_one(MessageListPanel)
+        panel.set_filter(event.value)
 
     def _do_save(self, path: Path) -> None:
         """Save the session store to the given path.
