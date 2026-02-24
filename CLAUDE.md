@@ -221,6 +221,7 @@ Must run on Windows, macOS, and Linux out of the box.
 ### Boundaries
 - Do not create PRs. Push the branch and stop. The developer creates PRs manually.
 - Do not attempt to install CLI tools (gh, hub, etc.)
+- Do not create implementation plan files in the repo. Plans are transient session artifacts, not project documentation.
 
 ## Legal & Ethical
 
