@@ -97,6 +97,82 @@ class TestReplayKeybinding:
         assert "f9" in binding_keys
 
 
+class TestReplayActionGuards:
+    """action_replay_message rejects invalid selections."""
+
+    async def test_rejects_server_to_client(self) -> None:
+        app = ProxyApp(
+            transport=Transport.STDIO,
+            server_command="echo hello",
+            run_pipeline_on_mount=False,
+        )
+        async with app.run_test() as pilot:
+            pm = _make_proxy_message(
+                direction=Direction.SERVER_TO_CLIENT, msg_id=1, seq=0
+            )
+            from mcp_proxy.tui.messages import MessageReceived
+
+            app.post_message(MessageReceived(pm))
+            await pilot.pause()
+            list_panel = app.query_one(MessageListPanel)
+            list_panel.query_one("ListView").index = 0
+            await pilot.pause()
+            # Trigger replay — should be rejected (server response selected)
+            app.action_replay_message()
+            await pilot.pause()
+            # Detail panel should NOT show replay diff headers
+            detail = app.query_one(MessageDetailPanel)
+            log = detail.query_one("#detail-log", RichLog)
+            text = "\n".join(str(line) for line in log.lines)
+            assert "REPLAY RESPONSE" not in text
+
+    async def test_rejects_notification(self) -> None:
+        app = ProxyApp(
+            transport=Transport.STDIO,
+            server_command="echo hello",
+            run_pipeline_on_mount=False,
+        )
+        async with app.run_test() as pilot:
+            notif = _make_notification("notifications/initialized", seq=0)
+            from mcp_proxy.tui.messages import MessageReceived
+
+            app.post_message(MessageReceived(notif))
+            await pilot.pause()
+            list_panel = app.query_one(MessageListPanel)
+            list_panel.query_one("ListView").index = 0
+            await pilot.pause()
+            # Trigger replay — should be rejected (notification selected)
+            app.action_replay_message()
+            await pilot.pause()
+            detail = app.query_one(MessageDetailPanel)
+            log = detail.query_one("#detail-log", RichLog)
+            text = "\n".join(str(line) for line in log.lines)
+            assert "REPLAY RESPONSE" not in text
+
+    async def test_rejects_no_server_command(self) -> None:
+        app = ProxyApp(
+            transport=Transport.STDIO,
+            server_command=None,
+            run_pipeline_on_mount=False,
+        )
+        async with app.run_test() as pilot:
+            pm = _make_proxy_message("tools/list", msg_id=1, seq=0)
+            from mcp_proxy.tui.messages import MessageReceived
+
+            app.post_message(MessageReceived(pm))
+            await pilot.pause()
+            list_panel = app.query_one(MessageListPanel)
+            list_panel.query_one("ListView").index = 0
+            await pilot.pause()
+            # Trigger replay — should be rejected (no server command)
+            app.action_replay_message()
+            await pilot.pause()
+            detail = app.query_one(MessageDetailPanel)
+            log = detail.query_one("#detail-log", RichLog)
+            text = "\n".join(str(line) for line in log.lines)
+            assert "REPLAY RESPONSE" not in text
+
+
 class TestReplayCompletedHandler:
     """on_replay_completed updates the detail panel."""
 

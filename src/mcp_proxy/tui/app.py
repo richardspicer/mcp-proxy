@@ -464,7 +464,7 @@ class ProxyApp(App[None]):
         self.run_worker(
             self._replay_worker(selected, original_response),
             name="replay",
-            exclusive=False,
+            exclusive=True,
         )
         self.notify("Replaying message...")
 
