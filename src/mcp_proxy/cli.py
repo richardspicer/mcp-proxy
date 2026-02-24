@@ -76,13 +76,69 @@ def replay(session_file: str, target_command: str | None, target_url: str | None
 )
 def export_session(session_file: str, output: str, output_format: str) -> None:
     """Export a session to JSON."""
-    click.echo(f"Export: {session_file} -> {output} ({output_format})")
-    click.echo("Not yet implemented.")
+    from mcp_proxy.session_store import SessionStore
+
+    try:
+        store = SessionStore.load(Path(session_file))
+    except Exception as exc:
+        raise click.ClickException(f"Failed to load session: {exc}") from exc
+
+    output_path = Path(output)
+    try:
+        store.save(output_path)
+    except Exception as exc:
+        raise click.ClickException(f"Failed to write export: {exc}") from exc
+
+    messages = store.get_messages()
+    click.echo(f"Exported {len(messages)} messages to {output_path}")
 
 
 @main.command()
 @click.option("--session-file", type=click.Path(exists=True), required=True)
-def inspect(session_file: str) -> None:
+@click.option("--verbose", "-v", is_flag=True, default=False, help="Show full JSON payloads.")
+def inspect(session_file: str, verbose: bool) -> None:
     """Print session contents to stdout (non-interactive)."""
-    click.echo(f"Inspect: {session_file}")
-    click.echo("Not yet implemented.")
+    import json
+
+    from mcp_proxy.session_store import SessionStore
+
+    try:
+        store = SessionStore.load(Path(session_file))
+    except Exception as exc:
+        raise click.ClickException(f"Failed to load session: {exc}") from exc
+
+    session = store.to_proxy_session()
+    messages = store.get_messages()
+
+    # Session header
+    click.echo(f"Session: {session.id}")
+    click.echo(f"Transport: {session.transport.value}")
+    if session.server_command:
+        click.echo(f"Server command: {session.server_command}")
+    if session.server_url:
+        click.echo(f"Server URL: {session.server_url}")
+    click.echo(f"Started: {session.started_at.isoformat()}")
+    click.echo(f"Messages: {len(messages)}")
+    if session.metadata:
+        click.echo(f"Metadata: {json.dumps(session.metadata)}")
+    click.echo("---")
+
+    # Message list
+    for msg in messages:
+        direction = "→" if msg.direction.value == "client_to_server" else "←"
+        method_str = msg.method or "(response)"
+        id_str = f" id={msg.jsonrpc_id}" if msg.jsonrpc_id is not None else ""
+        modified_str = " [MODIFIED]" if msg.modified else ""
+        corr_str = f" corr={msg.correlated_id[:8]}..." if msg.correlated_id else ""
+
+        click.echo(
+            f"  #{msg.sequence:03d} {direction} {method_str}{id_str}"
+            f"{corr_str}{modified_str}"
+        )
+
+        if verbose:
+            payload = msg.raw.model_dump(by_alias=True, exclude_none=True)
+            click.echo(f"       {json.dumps(payload, indent=2)}")
+            if msg.original_raw is not None:
+                original = msg.original_raw.model_dump(by_alias=True, exclude_none=True)
+                click.echo(f"       [original] {json.dumps(original, indent=2)}")
