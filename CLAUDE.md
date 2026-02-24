@@ -221,7 +221,7 @@ Must run on Windows, macOS, and Linux out of the box.
 ### Boundaries
 - Do not create PRs. Push the branch and stop. The developer creates PRs manually.
 - Do not attempt to install CLI tools (gh, hub, etc.)
-- Do not create implementation plan files in the repo. Plans are transient session artifacts, not project documentation.
+- Do not create implementation plan files, design docs, or any docs/plans/ directory in the repo. NEVER commit plan files. If subagent-driven development requires a plan file, write it to the system temp directory (e.g., `$TEMP/mcp-proxy-plans/`), not the repo. Plans are transient session artifacts, not project documentation.
 
 ## Legal & Ethical
 
