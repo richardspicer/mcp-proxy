@@ -13,6 +13,7 @@ from textual.widget import Widget
 from textual.widgets import RichLog, TextArea
 
 from mcp_proxy.models import ProxyMessage
+from mcp_proxy.replay import ReplayResult
 
 
 class MessageDetailPanel(Widget):
@@ -116,3 +117,40 @@ class MessageDetailPanel(Widget):
         """
         text: str = self.query_one("#detail-editor", TextArea).text
         return text
+
+    def show_replay_diff(
+        self,
+        original_response: ProxyMessage | None,
+        replay_result: ReplayResult,
+    ) -> None:
+        """Display original and replay responses for comparison.
+
+        Args:
+            original_response: The original server response (None if not correlated).
+            replay_result: The replay engine result containing the new response.
+        """
+        if self._editing:
+            self.exit_edit_mode()
+
+        log = self.query_one("#detail-log", RichLog)
+        log.clear()
+
+        if original_response is not None:
+            log.write("--- ORIGINAL RESPONSE ---")
+            payload = original_response.raw.model_dump(by_alias=True, exclude_none=True)
+            log.write(json.dumps(payload, indent=2))
+            log.write("")
+
+        log.write("--- REPLAY RESPONSE ---")
+        if replay_result.error:
+            log.write(f"ERROR: {replay_result.error}")
+        elif replay_result.response is not None:
+            payload = replay_result.response.message.model_dump(
+                by_alias=True, exclude_none=True
+            )
+            log.write(json.dumps(payload, indent=2))
+        else:
+            log.write("(no response)")
+
+        log.write("")
+        log.write(f"Duration: {replay_result.duration_ms:.1f}ms")
