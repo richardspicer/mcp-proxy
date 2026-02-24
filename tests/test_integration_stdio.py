@@ -33,9 +33,11 @@ from mcp_proxy.models import (
     HeldMessage,
     InterceptAction,
     InterceptMode,
+    ProxyMessage,
     Transport,
 )
 from mcp_proxy.pipeline import PipelineSession, run_pipeline
+from mcp_proxy.replay import replay_messages
 from mcp_proxy.session_store import SessionStore
 
 # Path to the FastMCP fixture server
@@ -307,3 +309,124 @@ class TestInterceptHoldAndForward:
                 assert len(held_messages) >= 2
             finally:
                 await _shutdown_pipeline(client, pipeline_task)
+
+
+# ---------------------------------------------------------------------------
+# Replay integration tests
+# ---------------------------------------------------------------------------
+
+
+def _build_replay_messages() -> list[ProxyMessage]:
+    """Build ProxyMessages for replay testing (initialize + tools/list)."""
+    from datetime import UTC, datetime
+
+    msgs: list[ProxyMessage] = []
+
+    # initialize request
+    msgs.append(
+        ProxyMessage(
+            id=str(uuid.uuid4()),
+            sequence=0,
+            timestamp=datetime.now(tz=UTC),
+            direction=Direction.CLIENT_TO_SERVER,
+            transport=Transport.STDIO,
+            raw=JSONRPCMessage(
+                JSONRPCRequest(
+                    jsonrpc="2.0",
+                    id=1,
+                    method="initialize",
+                    params={
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {},
+                        "clientInfo": {"name": "test-replay", "version": "0.1.0"},
+                    },
+                )
+            ),
+            jsonrpc_id=1,
+            method="initialize",
+            correlated_id=None,
+            modified=False,
+            original_raw=None,
+        )
+    )
+
+    # notifications/initialized
+    msgs.append(
+        ProxyMessage(
+            id=str(uuid.uuid4()),
+            sequence=1,
+            timestamp=datetime.now(tz=UTC),
+            direction=Direction.CLIENT_TO_SERVER,
+            transport=Transport.STDIO,
+            raw=JSONRPCMessage(
+                JSONRPCNotification(
+                    jsonrpc="2.0", method="notifications/initialized"
+                )
+            ),
+            jsonrpc_id=None,
+            method="notifications/initialized",
+            correlated_id=None,
+            modified=False,
+            original_raw=None,
+        )
+    )
+
+    # tools/list request
+    msgs.append(
+        ProxyMessage(
+            id=str(uuid.uuid4()),
+            sequence=2,
+            timestamp=datetime.now(tz=UTC),
+            direction=Direction.CLIENT_TO_SERVER,
+            transport=Transport.STDIO,
+            raw=JSONRPCMessage(
+                JSONRPCRequest(jsonrpc="2.0", id=2, method="tools/list")
+            ),
+            jsonrpc_id=2,
+            method="tools/list",
+            correlated_id=None,
+            modified=False,
+            original_raw=None,
+        )
+    )
+
+    return msgs
+
+
+class TestReplayAgainstFixture:
+    """Replay captured messages against the real FastMCP fixture server."""
+
+    async def test_replay_against_fixture(self) -> None:
+        messages = _build_replay_messages()
+
+        async with StdioServerAdapter(
+            command=sys.executable,
+            args=[str(FIXTURE_PATH)],
+        ) as server:
+            results = await replay_messages(
+                messages, server, timeout=RESPONSE_TIMEOUT, auto_handshake=False
+            )
+
+        # Should have 3 results: initialize, notification, tools/list
+        assert len(results) == 3
+
+        # initialize response
+        init_result = results[0]
+        assert init_result.error is None
+        assert init_result.response is not None
+        assert "serverInfo" in init_result.response.message.root.result
+
+        # notification — no response expected
+        notif_result = results[1]
+        assert notif_result.error is None
+        assert notif_result.response is None
+
+        # tools/list response
+        tools_result = results[2]
+        assert tools_result.error is None
+        assert tools_result.response is not None
+        tool_names = [
+            t["name"] for t in tools_result.response.message.root.result["tools"]
+        ]
+        assert "file_search" in tool_names
+        assert "safe_echo" in tool_names

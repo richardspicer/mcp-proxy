@@ -170,3 +170,31 @@ class TestInspectCommand:
             main, ["inspect", "--session-file", str(tmp_path / "nope.json")]
         )
         assert result.exit_code != 0
+
+
+class TestReplayCommand:
+    """replay command CLI tests."""
+
+    def test_replay_help(self) -> None:
+        """replay --help exits cleanly and shows expected flags."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["replay", "--help"])
+        assert result.exit_code == 0
+        assert "--session-file" in result.output
+        assert "--target-command" in result.output
+        assert "--timeout" in result.output
+        assert "--no-handshake" in result.output
+        assert "--output" in result.output
+
+    def test_replay_missing_session(self, tmp_path: Path) -> None:
+        """Missing session file errors cleanly."""
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "replay",
+                "--session-file", str(tmp_path / "nonexistent.json"),
+                "--target-command", "python server.py",
+            ],
+        )
+        assert result.exit_code != 0
