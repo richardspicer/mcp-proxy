@@ -4,7 +4,13 @@ Defines the envelope types that wrap every intercepted JSON-RPC message,
 session containers for capture/export, and intercept engine state.
 """
 
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
+
+from mcp.types import JSONRPCMessage
 
 
 class Direction(StrEnum):
@@ -57,3 +63,34 @@ class InterceptAction(StrEnum):
     FORWARD = "forward"
     MODIFY = "modify"
     DROP = "drop"
+
+
+@dataclass
+class ProxyMessage:
+    """A single intercepted MCP JSON-RPC message with proxy metadata.
+
+    Args:
+        id: Unique proxy-assigned ID (UUID string).
+        sequence: Monotonic sequence number within the session.
+        timestamp: When the proxy received this message.
+        direction: CLIENT_TO_SERVER or SERVER_TO_CLIENT.
+        transport: The transport type (STDIO, SSE, STREAMABLE_HTTP).
+        raw: The actual JSON-RPC message (MCP SDK type).
+        jsonrpc_id: JSON-RPC id field (None for notifications).
+        method: JSON-RPC method (None for responses).
+        correlated_id: Proxy ID of the request this response correlates to.
+        modified: True if the user modified this message before forwarding.
+        original_raw: Pre-modification snapshot (populated when modified=True).
+    """
+
+    id: str
+    sequence: int
+    timestamp: datetime
+    direction: Direction
+    transport: Transport
+    raw: JSONRPCMessage
+    jsonrpc_id: str | int | None
+    method: str | None
+    correlated_id: str | None
+    modified: bool
+    original_raw: JSONRPCMessage | None
