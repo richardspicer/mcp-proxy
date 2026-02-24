@@ -35,6 +35,7 @@ class MessageListPanel(Widget):
     - ``\\u25ba`` (right arrow) for CLIENT_TO_SERVER
     - ``\\u25c4`` (left arrow) for SERVER_TO_CLIENT
     - ``\\u23f8`` (pause icon) prefix for held messages
+    - ``\\u2715`` (cross mark) prefix for dropped messages
 
     Attributes:
         messages: Ordered list of all ProxyMessages added.
@@ -50,6 +51,7 @@ class MessageListPanel(Widget):
         super().__init__()
         self.messages: list[ProxyMessage] = []
         self._held_ids: set[str] = set()
+        self._dropped_ids: set[str] = set()
 
     def compose(self) -> ComposeResult:
         """Compose the widget with an empty ListView."""
@@ -73,12 +75,56 @@ class MessageListPanel(Widget):
             proxy_id: The ProxyMessage.id to mark.
         """
         self._held_ids.add(proxy_id)
-        # Find the matching message and re-render its label
+        self._update_item_label(proxy_id)
+
+    def mark_forwarded(self, proxy_id: str) -> None:
+        """Remove held indicator from a message.
+
+        Args:
+            proxy_id: The ProxyMessage.id to update.
+        """
+        self._held_ids.discard(proxy_id)
+        self._update_item_label(proxy_id)
+
+    def mark_dropped(self, proxy_id: str) -> None:
+        """Show drop indicator on a message.
+
+        Args:
+            proxy_id: The ProxyMessage.id to mark as dropped.
+        """
+        self._held_ids.discard(proxy_id)
+        self._dropped_ids.add(proxy_id)
+        self._update_item_label(proxy_id)
+
+    def get_selected_message(self) -> ProxyMessage | None:
+        """Return the ProxyMessage for the currently highlighted item.
+
+        Returns:
+            The selected ProxyMessage, or None if nothing is highlighted.
+        """
+        list_view = self.query_one(ListView)
+        if list_view.highlighted_child is None:
+            return None
+        item_id = list_view.highlighted_child.id
+        if item_id is None:
+            return None
+        proxy_id = item_id.removeprefix("msg-")
+        for pm in self.messages:
+            if pm.id == proxy_id:
+                return pm
+        return None
+
+    def _update_item_label(self, proxy_id: str) -> None:
+        """Re-render the label for a message item.
+
+        Args:
+            proxy_id: The ProxyMessage.id to update.
+        """
         for pm in self.messages:
             if pm.id == proxy_id:
                 try:
                     item = self.query_one(f"#msg-{proxy_id}", ListItem)
-                    label = self._format_label(pm, held=True)
+                    label = self._format_label(pm)
                     item.query_one(Static).update(label)
                 except NoMatches:
                     pass
@@ -94,7 +140,12 @@ class MessageListPanel(Widget):
         Returns:
             Formatted label string.
         """
-        prefix = "\u23f8 " if held or pm.id in self._held_ids else ""
+        if pm.id in self._dropped_ids:
+            prefix = "\u2715 "
+        elif held or pm.id in self._held_ids:
+            prefix = "\u23f8 "
+        else:
+            prefix = ""
         arrow = "\u25ba" if pm.direction == Direction.CLIENT_TO_SERVER else "\u25c4"
         method_label = pm.method if pm.method else "response"
         return f"{prefix}{arrow} #{pm.sequence} {method_label}"

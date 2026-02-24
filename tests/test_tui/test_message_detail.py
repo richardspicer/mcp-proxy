@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 
 from mcp.types import JSONRPCMessage, JSONRPCRequest
 from textual.app import App, ComposeResult
+from textual.widgets import RichLog
 
 from mcp_proxy.models import Direction, ProxyMessage, Transport
 from mcp_proxy.tui.widgets.message_detail import MessageDetailPanel
@@ -53,9 +54,8 @@ class TestMessageDetailPanel:
             pm = _make_proxy_message("tools/call", seq=5, msg_id=42)
             panel.show_message(pm)
             await pilot.pause()
-            # The panel's internal content should contain the method
-            lines = panel.lines
-            text = "\n".join(str(line) for line in lines)
+            log = panel.query_one("#detail-log", RichLog)
+            text = "\n".join(str(line) for line in log.lines)
             assert "tools/call" in text
 
     async def test_show_message_displays_metadata(self) -> None:
@@ -65,8 +65,8 @@ class TestMessageDetailPanel:
             pm = _make_proxy_message("tools/list", seq=3)
             panel.show_message(pm)
             await pilot.pause()
-            lines = panel.lines
-            text = "\n".join(str(line) for line in lines)
+            log = panel.query_one("#detail-log", RichLog)
+            text = "\n".join(str(line) for line in log.lines)
             assert "#3" in text
             assert "CLIENT_TO_SERVER" in text or "client_to_server" in text
 
@@ -77,7 +77,7 @@ class TestMessageDetailPanel:
             pm = _make_proxy_message()
             panel.show_message(pm)
             await pilot.pause()
-            panel.clear()
+            log = panel.query_one("#detail-log", RichLog)
+            log.clear()
             await pilot.pause()
-            # After clear, should have no lines
-            assert len(panel.lines) == 0
+            assert len(log.lines) == 0

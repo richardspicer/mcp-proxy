@@ -1,27 +1,32 @@
 """Message detail panel for mcp-proxy TUI.
 
 Displays the full JSON-RPC payload and proxy metadata for a selected
-message. Uses RichLog for scrollable, formatted output.
+message. Supports read-only viewing via RichLog and edit mode via TextArea.
 """
 
 from __future__ import annotations
 
 import json
 
-from textual.widgets import RichLog
+from textual.app import ComposeResult
+from textual.widget import Widget
+from textual.widgets import RichLog, TextArea
 
 from mcp_proxy.models import ProxyMessage
 
 
-class MessageDetailPanel(RichLog):
+class MessageDetailPanel(Widget):
     """Right-side panel showing JSON-RPC payload and metadata.
 
     Displays formatted JSON of the selected message along with proxy
-    metadata (sequence, direction, timestamp, correlation).
+    metadata (sequence, direction, timestamp, correlation). Supports
+    toggling into edit mode for message modification.
 
     Example:
         panel.show_message(proxy_message)
-        panel.clear()
+        panel.enter_edit_mode(proxy_message)
+        text = panel.get_edited_text()
+        panel.exit_edit_mode()
     """
 
     DEFAULT_CSS = """
@@ -31,29 +36,83 @@ class MessageDetailPanel(RichLog):
     }
     """
 
+    def __init__(self) -> None:
+        super().__init__()
+        self._current_message: ProxyMessage | None = None
+        self._editing: bool = False
+
+    def compose(self) -> ComposeResult:
+        """Compose the widget with a RichLog viewer and hidden TextArea editor."""
+        yield RichLog(id="detail-log")
+        yield TextArea(id="detail-editor", classes="hidden")
+
+    @property
+    def is_editing(self) -> bool:
+        """Whether the panel is currently in edit mode."""
+        return self._editing
+
     def show_message(self, proxy_message: ProxyMessage) -> None:
         """Display a ProxyMessage's payload and metadata.
 
         Args:
             proxy_message: The message to display.
         """
-        self.clear()
+        self._current_message = proxy_message
+        log = self.query_one("#detail-log", RichLog)
+        log.clear()
 
         # Metadata header
-        self.write(f"--- Message #{proxy_message.sequence} ---")
-        self.write(f"Direction: {proxy_message.direction.value}")
-        self.write(f"Timestamp: {proxy_message.timestamp.isoformat()}")
+        log.write(f"--- Message #{proxy_message.sequence} ---")
+        log.write(f"Direction: {proxy_message.direction.value}")
+        log.write(f"Timestamp: {proxy_message.timestamp.isoformat()}")
         if proxy_message.method:
-            self.write(f"Method: {proxy_message.method}")
+            log.write(f"Method: {proxy_message.method}")
         if proxy_message.jsonrpc_id is not None:
-            self.write(f"JSON-RPC ID: {proxy_message.jsonrpc_id}")
+            log.write(f"JSON-RPC ID: {proxy_message.jsonrpc_id}")
         if proxy_message.correlated_id:
-            self.write(f"Correlated to: {proxy_message.correlated_id}")
+            log.write(f"Correlated to: {proxy_message.correlated_id}")
         if proxy_message.modified:
-            self.write("[Modified]")
-        self.write("")
+            log.write("[Modified]")
+        log.write("")
 
         # JSON payload
         payload = proxy_message.raw.model_dump(by_alias=True, exclude_none=True)
         formatted = json.dumps(payload, indent=2)
-        self.write(formatted)
+        log.write(formatted)
+
+    def enter_edit_mode(self, proxy_message: ProxyMessage) -> None:
+        """Switch to edit mode with the message payload in a TextArea.
+
+        Args:
+            proxy_message: The message to edit.
+        """
+        self._current_message = proxy_message
+        self._editing = True
+
+        payload = proxy_message.raw.model_dump(by_alias=True, exclude_none=True)
+        formatted = json.dumps(payload, indent=2)
+
+        editor = self.query_one("#detail-editor", TextArea)
+        editor.text = formatted
+
+        # Toggle visibility
+        self.query_one("#detail-log", RichLog).add_class("hidden")
+        editor.remove_class("hidden")
+        editor.focus()
+
+    def exit_edit_mode(self) -> None:
+        """Switch back to read-only mode."""
+        self._editing = False
+
+        # Toggle visibility
+        self.query_one("#detail-editor", TextArea).add_class("hidden")
+        self.query_one("#detail-log", RichLog).remove_class("hidden")
+
+    def get_edited_text(self) -> str:
+        """Return the current content of the TextArea editor.
+
+        Returns:
+            The edited JSON text.
+        """
+        text: str = self.query_one("#detail-editor", TextArea).text
+        return text
