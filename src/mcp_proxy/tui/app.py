@@ -433,6 +433,8 @@ class ProxyApp(App[None]):
 
     def action_focus_filter(self) -> None:
         """Focus the message filter input."""
+        if self._editing:
+            return
         try:
             filter_input = self.query_one("#filter-input", Input)
             filter_input.focus()

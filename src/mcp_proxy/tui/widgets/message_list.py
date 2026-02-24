@@ -183,10 +183,10 @@ class MessageListPanel(Widget):
 
         if text.startswith(">"):
             required_direction = Direction.CLIENT_TO_SERVER
-            text = text[1:]
+            text = text[1:].strip()
         elif text.startswith("<"):
             required_direction = Direction.SERVER_TO_CLIENT
-            text = text[1:]
+            text = text[1:].strip()
 
         if required_direction is not None and pm.direction != required_direction:
             return False
