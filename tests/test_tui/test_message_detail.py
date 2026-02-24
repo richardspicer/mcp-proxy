@@ -5,11 +5,13 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from mcp.types import JSONRPCMessage, JSONRPCRequest
+from mcp.shared.message import SessionMessage
+from mcp.types import JSONRPCMessage, JSONRPCRequest, JSONRPCResponse
 from textual.app import App, ComposeResult
 from textual.widgets import RichLog
 
 from mcp_proxy.models import Direction, ProxyMessage, Transport
+from mcp_proxy.replay import ReplayResult
 from mcp_proxy.tui.widgets.message_detail import MessageDetailPanel
 
 
@@ -81,3 +83,96 @@ class TestMessageDetailPanel:
             log.clear()
             await pilot.pause()
             assert len(log.lines) == 0
+
+
+def _make_response_proxy_message(
+    msg_id: int = 1, result: dict | None = None
+) -> ProxyMessage:
+    """Build a response ProxyMessage for testing."""
+    return ProxyMessage(
+        id=str(uuid.uuid4()),
+        sequence=1,
+        timestamp=datetime.now(tz=UTC),
+        direction=Direction.SERVER_TO_CLIENT,
+        transport=Transport.STDIO,
+        raw=JSONRPCMessage(
+            JSONRPCResponse(jsonrpc="2.0", id=msg_id, result=result or {})
+        ),
+        jsonrpc_id=msg_id,
+        method=None,
+        correlated_id=None,
+        modified=False,
+        original_raw=None,
+    )
+
+
+def _make_replay_result(
+    original: ProxyMessage,
+    response_result: dict | None = None,
+    error: str | None = None,
+    duration_ms: float = 42.0,
+) -> ReplayResult:
+    """Build a ReplayResult for testing."""
+    sent = SessionMessage(message=original.raw)
+    response = None
+    if response_result is not None and error is None:
+        response = SessionMessage(
+            message=JSONRPCMessage(
+                JSONRPCResponse(
+                    jsonrpc="2.0", id=original.jsonrpc_id, result=response_result
+                )
+            )
+        )
+    return ReplayResult(
+        original_request=original,
+        sent_message=sent,
+        response=response,
+        error=error,
+        duration_ms=duration_ms,
+    )
+
+
+class TestShowReplayDiff:
+    """show_replay_diff displays original and replay responses."""
+
+    async def test_both_present(self) -> None:
+        app = DetailTestApp()
+        async with app.run_test() as pilot:
+            panel = app.query_one(MessageDetailPanel)
+            original = _make_response_proxy_message(msg_id=1, result={"tools": ["old"]})
+            request = _make_proxy_message("tools/list", msg_id=1)
+            replay = _make_replay_result(request, response_result={"tools": ["new"]})
+            panel.show_replay_diff(original, replay)
+            await pilot.pause()
+            log = panel.query_one("#detail-log", RichLog)
+            text = "\n".join(str(line) for line in log.lines)
+            assert "ORIGINAL RESPONSE" in text
+            assert "REPLAY RESPONSE" in text
+            assert "old" in text
+            assert "new" in text
+
+    async def test_no_original(self) -> None:
+        app = DetailTestApp()
+        async with app.run_test() as pilot:
+            panel = app.query_one(MessageDetailPanel)
+            request = _make_proxy_message("tools/list", msg_id=1)
+            replay = _make_replay_result(request, response_result={"tools": ["new"]})
+            panel.show_replay_diff(None, replay)
+            await pilot.pause()
+            log = panel.query_one("#detail-log", RichLog)
+            text = "\n".join(str(line) for line in log.lines)
+            assert "ORIGINAL RESPONSE" not in text
+            assert "REPLAY RESPONSE" in text
+
+    async def test_replay_error(self) -> None:
+        app = DetailTestApp()
+        async with app.run_test() as pilot:
+            panel = app.query_one(MessageDetailPanel)
+            request = _make_proxy_message("tools/list", msg_id=1)
+            replay = _make_replay_result(request, error="Timeout after 10s")
+            panel.show_replay_diff(None, replay)
+            await pilot.pause()
+            log = panel.query_one("#detail-log", RichLog)
+            text = "\n".join(str(line) for line in log.lines)
+            assert "REPLAY RESPONSE" in text
+            assert "Timeout after 10s" in text

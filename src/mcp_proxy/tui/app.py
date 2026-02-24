@@ -12,6 +12,7 @@ import shlex
 import uuid
 from pathlib import Path
 
+from mcp.shared.message import SessionMessage
 from mcp.types import JSONRPCMessage
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -21,8 +22,10 @@ from textual.widgets import Footer, Header, Input
 from textual.worker import Worker
 
 from mcp_proxy.adapters.base import TransportAdapter
+from mcp_proxy.correlation import is_notification
 from mcp_proxy.intercept import InterceptEngine
 from mcp_proxy.models import (
+    Direction,
     HeldMessage,
     InterceptAction,
     InterceptMode,
@@ -30,6 +33,7 @@ from mcp_proxy.models import (
     Transport,
 )
 from mcp_proxy.pipeline import PipelineSession, run_pipeline
+from mcp_proxy.replay import ReplayResult, replay_messages
 from mcp_proxy.session_store import SessionStore
 from mcp_proxy.tui.messages import (
     MessageForwarded,
@@ -37,6 +41,7 @@ from mcp_proxy.tui.messages import (
     MessageReceived,
     PipelineError,
     PipelineStopped,
+    ReplayCompleted,
 )
 from mcp_proxy.tui.widgets.message_detail import MessageDetailPanel
 from mcp_proxy.tui.widgets.message_list import MessageListPanel, MessageSelected
@@ -69,6 +74,8 @@ class ProxyApp(App[None]):
         Binding("m", "modify", "Modify", key_display="m/F6"),
         Binding("f6", "modify", "Modify", show=False),
         ("s", "save_session", "Save"),
+        Binding("r", "replay_message", "Replay", key_display="r/F9"),
+        Binding("f9", "replay_message", "Replay", show=False),
         Binding("ctrl+s", "confirm_modify", "Confirm Edit", show=False),
         Binding("escape", "cancel_modify", "Cancel Edit", show=False),
     ]
@@ -300,6 +307,21 @@ class ProxyApp(App[None]):
         bar = self.query_one(ProxyStatusBar)
         bar.connection_status = "DISCONNECTED"
 
+    def on_replay_completed(self, event: ReplayCompleted) -> None:
+        """Handle replay completion -- show diff in detail panel.
+
+        Args:
+            event: The ReplayCompleted event with results.
+        """
+        detail = self.query_one(MessageDetailPanel)
+        detail.show_replay_diff(event.original_response, event.result)
+
+        result = event.result
+        if result.error:
+            self.notify(f"Replay failed: {result.error}", severity="error")
+        else:
+            self.notify(f"Replay complete: {result.duration_ms:.0f}ms")
+
     # ------------------------------------------------------------------
     # Intercept control actions
     # ------------------------------------------------------------------
@@ -407,6 +429,96 @@ class ProxyApp(App[None]):
         panel.mark_forwarded(held.proxy_message.id)
         bar = self.query_one(ProxyStatusBar)
         bar.held_count = len(self.intercept_engine.get_held())
+
+    def action_replay_message(self) -> None:
+        """Replay the selected message against a fresh server connection."""
+        if self._editing:
+            return
+
+        if not self.server_command:
+            self.notify("Replay requires stdio transport", severity="warning")
+            return
+
+        panel = self.query_one(MessageListPanel)
+        selected = panel.get_selected_message()
+        if selected is None:
+            return
+
+        if selected.direction != Direction.CLIENT_TO_SERVER:
+            self.notify("Select a client request to replay", severity="warning")
+            return
+
+        if is_notification(selected.raw):
+            self.notify(
+                "Cannot replay notifications (no response expected)",
+                severity="warning",
+            )
+            return
+
+        original_response: ProxyMessage | None = None
+        for msg in self.session_store.get_messages():
+            if msg.correlated_id == selected.id:
+                original_response = msg
+                break
+
+        self.run_worker(
+            self._replay_worker(selected, original_response),
+            name="replay",
+            exclusive=True,
+        )
+        self.notify("Replaying message...")
+
+    async def _replay_worker(
+        self,
+        message: ProxyMessage,
+        original_response: ProxyMessage | None,
+    ) -> None:
+        """Background worker that replays a message against a fresh server.
+
+        Args:
+            message: The client request to replay.
+            original_response: The original server response for comparison.
+        """
+        from mcp_proxy.adapters.stdio import StdioServerAdapter
+
+        parts = shlex.split(self.server_command)  # type: ignore[arg-type]
+        command = parts[0]
+        args = parts[1:] if len(parts) > 1 else []
+
+        try:
+            async with StdioServerAdapter(command=command, args=args) as server_adapter:
+                results = await replay_messages([message], server_adapter)
+                result = results[0] if results else None
+                if result:
+                    self.post_message(
+                        ReplayCompleted(result=result, original_response=original_response)
+                    )
+                else:
+                    self.post_message(
+                        ReplayCompleted(
+                            result=ReplayResult(
+                                original_request=message,
+                                sent_message=SessionMessage(message=message.raw),
+                                response=None,
+                                error="No result from replay engine",
+                                duration_ms=0.0,
+                            ),
+                            original_response=original_response,
+                        )
+                    )
+        except Exception as exc:
+            self.post_message(
+                ReplayCompleted(
+                    result=ReplayResult(
+                        original_request=message,
+                        sent_message=SessionMessage(message=message.raw),
+                        response=None,
+                        error=str(exc),
+                        duration_ms=0.0,
+                    ),
+                    original_response=original_response,
+                )
+            )
 
     def action_save_session(self) -> None:
         """Save the current session to a file."""

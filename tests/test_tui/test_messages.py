@@ -6,15 +6,18 @@ import asyncio
 import uuid
 from datetime import UTC, datetime
 
+from mcp.shared.message import SessionMessage
 from mcp.types import JSONRPCMessage, JSONRPCRequest
 
 from mcp_proxy.models import Direction, HeldMessage, ProxyMessage, Transport
+from mcp_proxy.replay import ReplayResult
 from mcp_proxy.tui.messages import (
     MessageForwarded,
     MessageHeld,
     MessageReceived,
     PipelineError,
     PipelineStopped,
+    ReplayCompleted,
 )
 
 
@@ -83,3 +86,36 @@ class TestPipelineStopped:
     def test_instantiates(self) -> None:
         msg = PipelineStopped()
         assert isinstance(msg, PipelineStopped)
+
+
+class TestReplayCompleted:
+    """ReplayCompleted wraps a ReplayResult and optional original response."""
+
+    def test_stores_result_and_original(self) -> None:
+        pm = _make_proxy_message()
+        sent = SessionMessage(message=pm.raw)
+        result = ReplayResult(
+            original_request=pm,
+            sent_message=sent,
+            response=None,
+            error=None,
+            duration_ms=42.0,
+        )
+        original_resp = _make_proxy_message("tools/list", seq=1)
+        msg = ReplayCompleted(result=result, original_response=original_resp)
+        assert msg.result is result
+        assert msg.original_response is original_resp
+
+    def test_stores_result_without_original(self) -> None:
+        pm = _make_proxy_message()
+        sent = SessionMessage(message=pm.raw)
+        result = ReplayResult(
+            original_request=pm,
+            sent_message=sent,
+            response=None,
+            error="timeout",
+            duration_ms=10000.0,
+        )
+        msg = ReplayCompleted(result=result, original_response=None)
+        assert msg.result is result
+        assert msg.original_response is None

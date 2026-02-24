@@ -10,6 +10,7 @@ from __future__ import annotations
 from textual.message import Message
 
 from mcp_proxy.models import HeldMessage, ProxyMessage
+from mcp_proxy.replay import ReplayResult
 
 
 class MessageReceived(Message):
@@ -65,3 +66,18 @@ class PipelineStopped(Message):
 
     def __init__(self) -> None:
         super().__init__()
+
+
+class ReplayCompleted(Message):
+    """Replay of a message completed with results.
+
+    Args:
+        result: The ReplayResult from the replay engine.
+        original_response: The original server response for comparison
+            (None if no correlated response was found).
+    """
+
+    def __init__(self, result: ReplayResult, original_response: ProxyMessage | None) -> None:
+        super().__init__()
+        self.result = result
+        self.original_response = original_response
