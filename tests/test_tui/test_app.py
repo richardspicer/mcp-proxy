@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 
 from mcp.shared.message import SessionMessage
 from mcp.types import JSONRPCMessage, JSONRPCRequest
+from textual.widgets import RichLog
 
 from mcp_proxy.models import Direction, HeldMessage, ProxyMessage, Transport
 from mcp_proxy.tui.app import ProxyApp
@@ -208,7 +209,8 @@ class TestSelection:
             list_view.index = 0
             await pilot.pause()
             detail = app.query_one(MessageDetailPanel)
-            text = "\n".join(str(line) for line in detail.lines)
+            log = detail.query_one("#detail-log", RichLog)
+            text = "\n".join(str(line) for line in log.lines)
             assert "tools/call" in text
 
 

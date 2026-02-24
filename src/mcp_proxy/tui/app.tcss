@@ -12,3 +12,11 @@ MessageListPanel {
 MessageDetailPanel {
     width: 1fr;
 }
+
+.hidden {
+    display: none;
+}
+
+#detail-editor {
+    height: 1fr;
+}
