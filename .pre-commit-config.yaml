@@ -26,6 +26,18 @@ repos:
         args: ['--fix']
       - id: ruff-format
 
+  # Mypy type checker
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.19.1
+    hooks:
+      - id: mypy
+        args: ['--config-file=pyproject.toml', 'src/mcp_proxy/']
+        additional_dependencies:
+          - pydantic>=2.0
+          - click>=8.3
+        pass_filenames: false
+        files: ^src/mcp_proxy/
+
   # Secrets detection
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.0
