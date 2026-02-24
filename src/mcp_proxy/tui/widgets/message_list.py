@@ -223,6 +223,10 @@ class MessageListPanel(Widget):
             else:
                 item.add_class("hidden")
 
+    def on_mount(self) -> None:
+        """Focus the ListView on mount so the filter input is not auto-focused."""
+        self.query_one(ListView).focus()
+
     def action_unfocus_filter(self) -> None:
         """Return focus from the filter input to the message list."""
         self.query_one(ListView).focus()
