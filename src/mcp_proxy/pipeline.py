@@ -150,6 +150,9 @@ async def _forward_loop(
                 continue
 
             if held.action == InterceptAction.MODIFY and held.modified_raw is not None:
+                proxy_msg.original_raw = proxy_msg.raw
+                proxy_msg.raw = held.modified_raw
+                proxy_msg.modified = True
                 session_message = SessionMessage(message=held.modified_raw)
 
         # Forward

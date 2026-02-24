@@ -374,6 +374,13 @@ class TestInterceptModify:
         forwarded = server.write_queue.get_nowait()
         assert forwarded.message.root.method == "tools/call"
 
+        # Verify modification tracking on the stored ProxyMessage
+        messages = session.session_store.get_messages()
+        modified_msg = [m for m in messages if m.method == "tools/list"][0]
+        assert modified_msg.modified is True
+        assert modified_msg.original_raw is not None
+        assert modified_msg.raw == modified_raw
+
 
 # ---------------------------------------------------------------------------
 # Tests: Callbacks
