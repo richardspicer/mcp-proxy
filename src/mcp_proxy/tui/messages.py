@@ -62,3 +62,6 @@ class PipelineError(Message):
 
 class PipelineStopped(Message):
     """The pipeline has stopped (adapters disconnected)."""
+
+    def __init__(self) -> None:
+        super().__init__()
